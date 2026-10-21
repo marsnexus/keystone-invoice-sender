@@ -1,0 +1,4 @@
+# The pairing (server + token) lives in ~/.keystone-invoice-sender/, never here — but in case
+# someone copies it in by hand, a token must never be committed.
+config.json
+*.log
