@@ -61,13 +61,18 @@ SERVER="$(json "$CONFIG" server)"
 TOKEN="$(json "$CONFIG" token)"
 [ -n "$SERVER" ] && [ -n "$TOKEN" ] || fail "the pairing in $CONFIG has no server or token"
 
-BODY="$(mktemp "${TMPDIR:-/tmp}/keystone-invoice-sender.XXXXXX")" || fail "could not make a temporary file"
-trap 'rm -f "$BODY"' EXIT
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/keystone-invoice-sender.XXXXXX")" || fail "could not make a temporary folder"
+trap 'rm -rf "$WORK"' EXIT
+BODY="$WORK/answer.json"
+# macOS names the PDF after the page's TITLE, and curl's -F reads ";" and "," in a file name as
+# its own syntax — a title with either would break the upload. A copy with a plain name cannot.
+cp "$PDF" "$WORK/invoice.pdf" || fail "could not copy the PDF"
 
-# The token goes in a header read from stdin, so it never appears in the process list.
-STATUS="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | "$CURL" -sS --max-time 90 \
+# The token goes in a header read from stdin, so it never appears in the process list. The
+# server reads the invoice before it answers (up to two AI calls), so give it time.
+STATUS="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | "$CURL" -sS --max-time 180 \
   -H @- \
-  -F "file=@${PDF};type=application/pdf" \
+  -F "file=@${WORK}/invoice.pdf;type=application/pdf" \
   -o "$BODY" -w '%{http_code}' \
   "${SERVER%/}/api/collection/received-invoices/intake" 2>>"$LOG")"
 CODE=$?

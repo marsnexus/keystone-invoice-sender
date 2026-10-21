@@ -16,8 +16,8 @@ Safari → File → Print → PDF ▾ → Send to counter
         ◀── "Sent. Please go to the counter." ─┘                            Open → Create order
 ```
 
-The sender only ever dials **out**. Nothing is stored on the Mac but the pairing: the PDF macOS
-made is sent and left where macOS put it. The server decides everything else — what the invoice
+The sender only ever dials **out**. Nothing is stored on the Mac but the pairing and a log line:
+the PDF macOS made is sent (from a temporary copy, removed afterwards) and left where macOS put it. The server decides everything else — what the invoice
 says, whether it was sent already, how many may be sent in an hour — so a change there never
 means revisiting the shop.
 

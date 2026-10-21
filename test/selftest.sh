@@ -69,7 +69,7 @@ run "unreachable"     000 '' 1 "hand your invoice to the staff" 7
 : >"$STUB_LOG"
 STUB_STATUS=200 STUB_BODY='{"message":{"en":"ok","zh":"ok"}}' bash "$HERE/send-to-counter.sh" "t" "" "$WORK/invoice.pdf"
 if grep -qF "URL https://centre.example.com/api/collection/received-invoices/intake" "$STUB_LOG" &&
-   grep -qF "F file=@$WORK/invoice.pdf;type=application/pdf" "$STUB_LOG" &&
+   grep -qE "F file=@.*/invoice\.pdf;type=application/pdf" "$STUB_LOG" &&
    grep -qF "HEADERS Authorization: Bearer kinv_test" "$STUB_LOG"; then
   PASS=$((PASS + 1)); echo "PASS request shape"
 else
@@ -80,6 +80,12 @@ if grep -qF "kinv_test" "$KIS_LOG"; then
 else
   PASS=$((PASS + 1)); echo "PASS the token is never logged"
 fi
+
+# macOS names the file after the page title: ";" and "," must not reach curl's -F.
+cp "$WORK/invoice.pdf" "$WORK/Invoice; Tan, Mei Ling.pdf"
+: >"$STUB_LOG"; : >"$STUB_SAID"
+STUB_STATUS=200 STUB_BODY='{"message":{"en":"Sent.","zh":"已发送"}}' bash "$HERE/send-to-counter.sh" "Invoice; Tan, Mei Ling" "" "$WORK/Invoice; Tan, Mei Ling.pdf"
+if [ $? = 0 ] && grep -qE "F file=@[^;,]*/invoice\.pdf;type=application/pdf" "$STUB_LOG"; then PASS=$((PASS + 1)); echo "PASS title with ; and ,"; else FAILS=$((FAILS + 1)); echo "FAIL title with ; and , ($(cat "$STUB_LOG"))"; fi
 
 # Not paired, and no PDF handed over: the customer is told to go to the staff.
 : >"$STUB_SAID"
