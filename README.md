@@ -1,7 +1,7 @@
 # Keystone invoice sender
 
 Adds **Send to counter** to the macOS print dialog. A customer prints their invoice to it from
-the shop's shared Mac, and it arrives at the counter, already read, for staff to check and turn
+the shop's shared Mac, and it arrives at the counter within seconds, read by AI, for staff to check and turn
 into an order.
 
 ## How it fits together

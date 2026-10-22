@@ -84,8 +84,8 @@ BODY="$WORK/answer.json"
 cp "$PDF" "$WORK/invoice.pdf" || fail "could not copy the PDF"
 
 # The token goes in a header read from stdin, so it never appears in the process list. The
-# server reads the invoice before it answers (up to two AI calls), so give it time.
-STATUS="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | "$CURL" -sS --max-time 180 \
+# server answers as soon as it has stored the PDF (it reads it afterwards); 60 s covers a slow line.
+STATUS="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | "$CURL" -sS --max-time 60 \
   -H @- \
   -F "file=@${WORK}/invoice.pdf;type=application/pdf" \
   -o "$BODY" -w '%{http_code}' \
