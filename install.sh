@@ -103,8 +103,9 @@ case "$SERVER" in
   http://localhost*|http://*.localhost*|http://*.localhost:*) ;;   # a developer's own machine
   *) echo "The server must be an https:// address (got: $SERVER)."; exit 1 ;;
 esac
+# They are written into a bash script between double quotes: nothing that bash would expand there.
 case "$TOKEN$SERVER" in
-  *'"'*|*'\'*) echo "The token and server may not contain quotes or backslashes."; exit 1 ;;
+  *'"'*|*'\'*|*'$'*|*'`'*) echo "The token and server may not contain quotes, backslashes, \$ or backticks."; exit 1 ;;
 esac
 LABEL="${LABEL:-Send to counter}"
 case "$LABEL" in
@@ -128,7 +129,7 @@ echo "Pairing written to $CONFIG"
 mkdir -p "$SERVICES"
 # macOS runs a PDF Service in the print system's sandbox, where the pairing file above cannot be
 # read — so the installed copy carries the server and token itself, readable by this account only.
-# (The token and server were checked above: no quotes, no backslashes.)
+# (The token and server were checked above: no quotes, backslashes, $ or backticks.)
 KIS_SERVER="$SERVER" KIS_TOKEN="$TOKEN" /usr/bin/awk '
   /^PAIRED_SERVER=""$/ { print "PAIRED_SERVER=\"" ENVIRON["KIS_SERVER"] "\""; next }
   /^PAIRED_TOKEN=""$/  { print "PAIRED_TOKEN=\"" ENVIRON["KIS_TOKEN"] "\""; next }
