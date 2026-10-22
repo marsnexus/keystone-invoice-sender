@@ -9,8 +9,10 @@
 # What it does:
 #   1. writes the pairing to ~/.keystone-invoice-sender/config.json (mode 600) — never into this
 #      folder, so updating the sender cannot lose it and a token cannot be committed by accident;
-#   2. puts send-to-counter.sh in ~/Library/PDF Services/<label>, which is what makes <label>
-#      appear under PDF ▾ in every app's print dialog, for the account that is signed in;
+#   2. puts a copy of send-to-counter.sh, with the pairing written into it (mode 700), in
+#      ~/Library/PDF Services/<label>, which is what makes <label> appear under PDF ▾ in every
+#      app's print dialog, for the account that is signed in. The copy carries the pairing because
+#      macOS runs it in the print sandbox, which cannot read config.json;
 #   3. checks the pairing with the server (a request that stores nothing and costs nothing).
 #
 # Designed for a MACHINE STRAIGHT OUT OF THE BOX: bash, curl and plutil ship with macOS.
@@ -47,7 +49,7 @@ check() {
     return 1
   fi
   body="$(mktemp "${TMPDIR:-/tmp}/keystone-invoice-sender.XXXXXX")"
-  status="$(printf 'Authorization: Bearer %s\n' "$token" | /usr/bin/curl -sS --max-time 20 -H @- -o "$body" -w '%{http_code}' \
+  status="$(printf 'Authorization: Bearer %s\n' "$token" | "${KIS_CURL:-/usr/bin/curl}" -sS --max-time 20 -H @- -o "$body" -w '%{http_code}' \
     "${server%/}/api/collection/received-invoices/intake" || echo "000")"
   case "$status" in
     200) echo "✓ Paired with $server ($(json "$body" tenant))." ;;
@@ -57,7 +59,16 @@ check() {
     *)   echo "✗ $server answered HTTP $status." ;;
   esac
   rm -f "$body"
+  echo "Sender log: $(sender_log)"
   [ "$status" = "200" ]
+}
+
+# Where a send from the print dialog logs: the print agent's own temporary folder, because the
+# print sandbox may not write ~/Library/Logs.
+sender_log() {
+  local t
+  t="$(/usr/bin/getconf DARWIN_USER_TEMP_DIR 2>/dev/null || true)"
+  echo "${t%/}/com.apple.printtool.agent/keystone-invoice-sender.log"
 }
 
 if [ "$MODE" = "uninstall" ]; then
@@ -115,8 +126,16 @@ chmod 600 "$CONFIG"
 echo "Pairing written to $CONFIG"
 
 mkdir -p "$SERVICES"
-cp "$HERE/send-to-counter.sh" "$SERVICES/$LABEL"
-chmod 755 "$SERVICES/$LABEL"
+# macOS runs a PDF Service in the print system's sandbox, where the pairing file above cannot be
+# read — so the installed copy carries the server and token itself, readable by this account only.
+# (The token and server were checked above: no quotes, no backslashes.)
+KIS_SERVER="$SERVER" KIS_TOKEN="$TOKEN" /usr/bin/awk '
+  /^PAIRED_SERVER=""$/ { print "PAIRED_SERVER=\"" ENVIRON["KIS_SERVER"] "\""; next }
+  /^PAIRED_TOKEN=""$/  { print "PAIRED_TOKEN=\"" ENVIRON["KIS_TOKEN"] "\""; next }
+  { print }
+' "$HERE/send-to-counter.sh" >"$SERVICES/$LABEL"
+chmod 700 "$SERVICES/$LABEL"
+grep -qF "PAIRED_TOKEN=\"$TOKEN\"" "$SERVICES/$LABEL" || { echo "Could not write the pairing into the menu entry."; exit 1; }
 # Downloaded with a browser, the copy would carry the quarantine flag and macOS would refuse it.
 /usr/bin/xattr -d com.apple.quarantine "$SERVICES/$LABEL" 2>/dev/null || true
 echo "Added \"$LABEL\" to the print dialog's PDF menu."

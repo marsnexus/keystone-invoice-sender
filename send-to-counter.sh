@@ -9,18 +9,30 @@
 # Installed by ./install.sh into ~/Library/PDF Services/<the menu label>. It needs nothing that
 # does not ship with macOS: bash, curl, plutil and osascript.
 #
-# The pairing (which server, and this machine's token) is ~/.keystone-invoice-sender/config.json,
-# written by install.sh — never this file, so updating the sender cannot lose it.
+# ⚠️ macOS runs a PDF Service inside the print system's sandbox (com.apple.printtool.agent). There
+# it may read the PDF, this file and the network, and write its own temporary folder — but NOT read
+# anything else in the home folder (so not ~/.keystone-invoice-sender/config.json) nor write
+# ~/Library/Logs. So install.sh writes the pairing INTO the installed copy (the two lines below,
+# mode 700), and the log falls back to the print agent's temporary folder.
 #
 # For the self-test, every tool can be replaced through the environment:
 #   KIS_CONFIG, KIS_CURL, KIS_PLUTIL, KIS_OSASCRIPT, KIS_LOG
 set -u
+
+# Filled in by install.sh in the installed copy. Empty here, in the downloaded file.
+PAIRED_SERVER=""
+PAIRED_TOKEN=""
 
 CONFIG="${KIS_CONFIG:-$HOME/.keystone-invoice-sender/config.json}"
 CURL="${KIS_CURL:-/usr/bin/curl}"
 PLUTIL="${KIS_PLUTIL:-/usr/bin/plutil}"
 OSASCRIPT="${KIS_OSASCRIPT:-/usr/bin/osascript}"
 LOG="${KIS_LOG:-$HOME/Library/Logs/keystone-invoice-sender.log}"
+
+# The log is chosen ONCE, where it can be written: a redirect to a file that cannot be opened
+# makes bash skip the command it is on, so curl's `2>>"$LOG"` would never send at all.
+{ mkdir -p "$(dirname "$LOG")" && : >>"$LOG"; } 2>/dev/null || LOG="${TMPDIR:-/tmp}/keystone-invoice-sender.log"
+{ : >>"$LOG"; } 2>/dev/null || LOG=/dev/null
 
 PDF="${3:-}"
 
@@ -29,7 +41,6 @@ HAND_TO_STAFF_EN="It could not be sent. Please hand your invoice to the staff."
 HAND_TO_STAFF_ZH="发送失败，请把发票交给工作人员。"
 
 log() {
-  mkdir -p "$(dirname "$LOG")" 2>/dev/null
   printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$LOG" 2>/dev/null
 }
 
@@ -55,11 +66,15 @@ fail() {
 json() { "$PLUTIL" -extract "$2" raw -o - "$1" 2>/dev/null; }
 
 [ -n "$PDF" ] && [ -f "$PDF" ] || fail "no PDF was handed over (arguments: $*)"
-[ -f "$CONFIG" ] || fail "not paired: $CONFIG is missing — run install.sh"
-
-SERVER="$(json "$CONFIG" server)"
-TOKEN="$(json "$CONFIG" token)"
-[ -n "$SERVER" ] && [ -n "$TOKEN" ] || fail "the pairing in $CONFIG has no server or token"
+SERVER="$PAIRED_SERVER"
+TOKEN="$PAIRED_TOKEN"
+if [ -z "$SERVER" ] || [ -z "$TOKEN" ]; then
+  # Not written into this copy (run by hand from the download): the pairing file, where readable.
+  [ -r "$CONFIG" ] || fail "not paired: this copy carries no pairing and $CONFIG cannot be read — run install.sh again"
+  SERVER="$(json "$CONFIG" server)"
+  TOKEN="$(json "$CONFIG" token)"
+fi
+[ -n "$SERVER" ] && [ -n "$TOKEN" ] || fail "no server or token in the pairing — run install.sh again"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/keystone-invoice-sender.XXXXXX")" || fail "could not make a temporary folder"
 trap 'rm -rf "$WORK"' EXIT

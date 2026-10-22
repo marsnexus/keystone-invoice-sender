@@ -76,9 +76,15 @@ the token).
 
 | | |
 |---|---|
-| `~/.keystone-invoice-sender/config.json` | the server and token, mode 600 — never inside this folder |
-| `~/Library/PDF Services/<label>` | a copy of `send-to-counter.sh`; its file name is the menu label |
-| `~/Library/Logs/keystone-invoice-sender.log` | one line per send: the HTTP status and the outcome. Never the token, never the invoice |
+| `~/.keystone-invoice-sender/config.json` | the server and token, mode 600 — never inside this folder. What `--check` and a reinstall read |
+| `~/Library/PDF Services/<label>` | a copy of `send-to-counter.sh` **with the server and token written into it**, mode 700; its file name is the menu label |
+| the print agent's temporary folder — `./install.sh --check` prints the path | one line per send: the HTTP status and the outcome. Never the token, never the invoice |
+
+> **Why the copy carries the token.** macOS runs a PDF Service inside the print system's sandbox
+> (`com.apple.printtool.agent`). There it can read the PDF, its own file and the network, but
+> not `config.json` in your home folder, and it cannot write `~/Library/Logs`. So the installed
+> copy holds the pairing itself, readable only by this account, and logs where the sandbox lets
+> it. Rotating the token means running `./install.sh` again.
 
 ## What the customer sees
 
@@ -100,7 +106,7 @@ the person in front of them before an order exists.
 
 - **The label is not in the PDF menu.** Quit Safari and open it again; the menu is read when the
   app starts. Check the file is there and executable: `ls -l ~/Library/PDF\ Services/`.
-- **Nothing happens when it is chosen.** Look at `~/Library/Logs/keystone-invoice-sender.log`. No
+- **Nothing happens when it is chosen.** Look at the sender log (`./install.sh --check` prints where). No
   line at all means macOS did not run it: run `./install.sh` again (it clears the download
   quarantine flag).
 - **"It could not be sent".** `./install.sh --check` names the reason: the address, the token, or

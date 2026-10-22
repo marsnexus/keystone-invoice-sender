@@ -95,6 +95,34 @@ if [ $? = 1 ] && grep -qF "hand your invoice to the staff" "$STUB_SAID"; then PA
 bash "$HERE/send-to-counter.sh" "t" "" "$WORK/nothing.pdf"
 if [ $? = 1 ] && grep -qF "hand your invoice to the staff" "$STUB_SAID"; then PASS=$((PASS + 1)); echo "PASS no PDF"; else FAILS=$((FAILS + 1)); echo "FAIL no PDF"; fi
 
+# The print sandbox: the installed copy must send with NO readable pairing file and an unwritable
+# ~/Library/Logs, from the pairing install.sh wrote into it, logging to its temporary folder.
+mkdir -p "$WORK/home" "$WORK/printtmp"
+: >"$STUB_LOG"
+if STUB_STATUS=200 STUB_BODY='{"ok":true,"tenant":"centre"}' HOME="$WORK/home" \
+   bash "$HERE/install.sh" --token kinv_sandboxed --server https://centre.example.com --label "Send to counter" >/dev/null; then
+  PASS=$((PASS + 1)); echo "PASS install"
+else
+  FAILS=$((FAILS + 1)); echo "FAIL install"
+fi
+INSTALLED="$WORK/home/Library/PDF Services/Send to counter"
+if [ "$(stat -f '%Lp' "$INSTALLED" 2>/dev/null)" = "700" ] && grep -qF 'PAIRED_TOKEN="kinv_sandboxed"' "$INSTALLED" &&
+   ! grep -qF 'kinv_sandboxed' "$HERE/send-to-counter.sh"; then
+  PASS=$((PASS + 1)); echo "PASS the installed copy carries the pairing, owner only"
+else
+  FAILS=$((FAILS + 1)); echo "FAIL the installed copy carries the pairing, owner only"
+fi
+: >"$STUB_LOG"; : >"$STUB_SAID"
+STUB_STATUS=200 STUB_BODY='{"outcome":"new","message":{"en":"Sent.","zh":"已发送"}}' \
+  KIS_CONFIG="$WORK/unreadable/config.json" KIS_LOG="/dev/null/no/Logs/sender.log" TMPDIR="$WORK/printtmp/" \
+  bash "$INSTALLED" "t" "" "$WORK/invoice.pdf"
+if [ $? = 0 ] && grep -qF "URL https://centre.example.com/api/collection/received-invoices/intake" "$STUB_LOG" &&
+   grep -qF "HEADERS Authorization: Bearer kinv_sandboxed" "$STUB_LOG" && grep -qF "HTTP 200 new" "$WORK/printtmp/keystone-invoice-sender.log"; then
+  PASS=$((PASS + 1)); echo "PASS sends from inside the print sandbox"
+else
+  FAILS=$((FAILS + 1)); echo "FAIL sends from inside the print sandbox ($(cat "$STUB_LOG"))"
+fi
+
 bash -n "$HERE/send-to-counter.sh" && bash -n "$HERE/install.sh" && { PASS=$((PASS + 1)); echo "PASS syntax"; } || { FAILS=$((FAILS + 1)); echo "FAIL syntax"; }
 
 echo
